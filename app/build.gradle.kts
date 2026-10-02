@@ -16,8 +16,8 @@ android {
         applicationId = "com.ee555719.golinux"
         minSdk = 30
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
 
         ndk {
             abiFilters += "arm64-v8a"

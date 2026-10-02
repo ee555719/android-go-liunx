@@ -82,6 +82,14 @@ class QemuPaths(private val context: Context) {
 
     fun hasFirmware(): Boolean = firmwareCode.exists()
 
+    /** True if the APK bundles the UEFI firmware asset (extracted on first start). */
+    fun firmwareAssetPresent(): Boolean = runCatching {
+        context.assets.open("firmware/AAVMF_CODE.fd").close()
+    }.isSuccess
+
+    /** True if firmware is already extracted OR still available in the APK. */
+    fun firmwareAvailable(): Boolean = hasFirmware() || firmwareAssetPresent()
+
     fun deleteFirmwareVars() {
         if (varsFile.exists()) varsFile.delete()
     }

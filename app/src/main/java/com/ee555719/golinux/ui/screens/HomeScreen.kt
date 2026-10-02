@@ -57,7 +57,7 @@ fun HomeScreen(vm: MainViewModel, nav: NavController) {
     var showLog by remember { mutableStateOf(false) }
 
     val qemuPresent = remember { vm.app.qemuManager.paths.qemuBinaryPresent() }
-    val firmwarePresent = remember { vm.app.qemuManager.paths.hasFirmware() }
+    val firmwarePresent = remember { vm.app.qemuManager.paths.firmwareAvailable() }
     val diskInfo = remember { vm.app.diskManager.info() }
 
     LaunchedEffect(error) {
