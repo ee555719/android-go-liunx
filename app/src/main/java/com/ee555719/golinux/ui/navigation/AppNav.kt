@@ -26,6 +26,7 @@ import com.ee555719.golinux.R
 import com.ee555719.golinux.ui.MainViewModel
 import com.ee555719.golinux.ui.screens.BackupScreen
 import com.ee555719.golinux.ui.screens.DiskIsoScreen
+import com.ee555719.golinux.ui.screens.DisplayScreen
 import com.ee555719.golinux.ui.screens.HomeScreen
 import com.ee555719.golinux.ui.screens.PortForwardScreen
 import com.ee555719.golinux.ui.screens.SettingsScreen
@@ -36,6 +37,7 @@ private data class Tab(val route: String, val label: String)
 private val tabs = listOf(
     Tab("home", "首页"),
     Tab("ports", "端口"),
+    Tab("display", "屏幕"),
     Tab("terminal/ssh", "终端"),
     Tab("disk", "磁盘"),
     Tab("backup", "备份"),
@@ -67,6 +69,10 @@ fun AppNav(vm: MainViewModel) {
                             when (tab.route) {
                                 "home" -> Icon(Icons.Default.Home, contentDescription = tab.label)
                                 "ports" -> Icon(Icons.Default.Share, contentDescription = tab.label)
+                                "display" -> Icon(
+                                    painterResource(R.drawable.ic_display),
+                                    contentDescription = tab.label
+                                )
                                 "terminal/ssh" -> Icon(
                                     painterResource(R.drawable.ic_notification),
                                     contentDescription = tab.label
@@ -89,6 +95,7 @@ fun AppNav(vm: MainViewModel) {
         ) {
             composable("home") { HomeScreen(vm, nav) }
             composable("ports") { PortForwardScreen(vm) }
+            composable("display") { DisplayScreen(vm) }
             composable("terminal/{mode}") { entry ->
                 TerminalScreen(vm, entry.arguments?.getString("mode") ?: "ssh")
             }

@@ -208,6 +208,11 @@ fun HomeScreen(vm: MainViewModel, nav: NavController) {
                         modifier = Modifier.weight(1f)
                     ) { Text("串口终端") }
                 }
+                OutlinedButton(
+                    onClick = { nav.navigate("display") },
+                    enabled = state == VmState.RUNNING || state == VmState.SUSPENDED,
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("屏幕（显示桌面 / 控制台）") }
             }
         }
 

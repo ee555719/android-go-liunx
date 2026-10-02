@@ -36,6 +36,10 @@ object QemuCommandBuilder {
             args += listOf("-boot", "d")
         }
 
+        // graphical output: UEFI/OS framebuffer shown to the in-app VNC viewer
+        args += listOf("-device", "virtio-gpu-pci")
+        args += listOf("-vnc", "127.0.0.1:0,share=force-shared")
+
         val hostfwds = rules.filter { it.enabled && it.hostPort in 1..65535 && it.guestPort in 1..65535 }
             .map { "hostfwd=tcp::${it.hostPort}-:${it.guestPort}" }
         val netdev = "user,id=n1" + hostfwds.joinToString(",") { ",$it" }
@@ -46,7 +50,9 @@ object QemuCommandBuilder {
 
         args += listOf("-serial", "tcp:127.0.0.1:${cfg.serialPort},server=on,wait=off")
         args += listOf("-qmp", "tcp:127.0.0.1:${cfg.qmpPort},server=on,wait=off")
-        args += listOf("-nographic")
         return args
     }
+
+    /** VNC display 0 → TCP port 5900 (see -vnc arg above). */
+    const val VNC_PORT = 5900
 }
