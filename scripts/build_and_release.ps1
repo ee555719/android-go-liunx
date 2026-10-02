@@ -287,6 +287,7 @@ if (-not $SkipGit) {
 # ---------------------------------------------------------------------------
 if (-not $SkipRelease) {
     $ErrorActionPreference = "Continue"
+    Push-Location $ProjectRoot   # gh must run inside the repo to resolve owner/repo
     try {
         $exists = gh release view $tag 2>&1
         if ($LASTEXITCODE -eq 0) {
@@ -299,7 +300,7 @@ GoLinux VM $tag
 
 QEMU aarch64 VM on Android (arm64-v8a, Android 11+).
 
-- QEMU 9.x system emulation (GPL-2.0, Termux build) packed as JNI libs
+- QEMU 11.x system emulation (GPL-2.0, Termux build) packed as JNI libs
 - EDK2/AAVMF UEFI firmware
 - SSH + serial-console terminal with ANSI/VT100 emulator
 - Virtual disk manager, ISO import, port forwarding
@@ -316,6 +317,7 @@ Install the APK, grant *All files access*, then create and start a VM.
         Fail "release step failed: $($_.Exception.Message)"
     } finally {
         $ErrorActionPreference = "Stop"
+        Pop-Location
     }
 }
 
