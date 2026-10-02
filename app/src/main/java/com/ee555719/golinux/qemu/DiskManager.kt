@@ -24,6 +24,12 @@ class DiskManager(private val context: Context) {
     suspend fun create(sizeGb: Int): Result<DiskInfo> = withContext(Dispatchers.IO) {
         runCatching {
             paths.ensureDirs()
+            // qemu-img needs the shared libraries (LD_LIBRARY_PATH) that are
+            // extracted from assets on first use - without this step exec()
+            // fails with "CANNOTLINK ... libzstd.so.1 not found".
+            if (paths.qemuImgPresent()) {
+                paths.ensureLibs()
+            }
             // remove any previous disk of the other format
             listOf(paths.diskFile, paths.rawDiskFile).forEach { if (it.exists()) it.delete() }
             val target = paths.diskFile

@@ -85,7 +85,14 @@ object TarExtractor {
     private fun octal(buf: ByteArray, off: Int, len: Int): Long {
         val s = cstr(buf, off, len).trim()
         if (s.isEmpty()) return 0L
-        return s.filter { it.isDigit() }.toLongOrNull() ?: 0L
+        // tar size/offset fields are NUL- or space-terminated OCTAL numbers.
+        // Parsing them as decimal desynchronises the stream (EISDIR on the
+        // next bogus entry), so force base 8 here.
+        if (s.any { it.code < 0x30 || it.code > 0x37 }) {
+            // GNU base-256 encoding (>= 8 GiB entries) - not used by our assets
+            return 0L
+        }
+        return s.toLongOrNull(8) ?: 0L
     }
 
     private fun copyN(input: InputStream, out: OutputStream, count: Long) {
