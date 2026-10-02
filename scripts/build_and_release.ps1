@@ -295,6 +295,7 @@ if (-not $SkipRelease) {
             gh release upload $tag $apk --clobber
         } else {
             Log "creating release $tag..."
+            $notesFile = Join-Path $Work "release-notes-$tag.md"
             $notes = @"
 GoLinux VM $tag
 
@@ -308,7 +309,9 @@ QEMU aarch64 VM on Android (arm64-v8a, Android 11+).
 
 Install the APK, grant *All files access*, then create and start a VM.
 "@
-            gh release create $tag $apk --title "GoLinux VM $tag" --notes $notes
+            # write UTF8 without BOM so gh reads the notes cleanly
+            [System.IO.File]::WriteAllText($notesFile, $notes)
+            gh release create $tag $apk --title "GoLinux VM $tag" --notes-file $notesFile
         }
         if ($LASTEXITCODE -ne 0) { throw "gh release failed" }
         $url = gh release view $tag --json url --jq .url 2>$null
