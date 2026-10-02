@@ -26,6 +26,9 @@ class RfbClient(
     companion object {
         /** QEMU is launched with -vnc 127.0.0.1:0 → TCP 5900. */
         const val PORT = 5900
+
+        /** Max wait for the RFB version/security handshake bytes. */
+        const val HANDSHAKE_TIMEOUT_MS = 8000
     }
 
     @Volatile
@@ -71,6 +74,11 @@ class RfbClient(
         try {
             s.connect(InetSocketAddress(host, port), timeoutMs)
             s.tcpNoDelay = true
+            s.keepAlive = true
+            // handshake reads must not block forever - if QEMU accepts the TCP
+            // connection but never speaks RFB we want a retryable error instead
+            // of an eternal "连接中…"
+            s.soTimeout = HANDSHAKE_TIMEOUT_MS
             val inp = DataInputStream(BufferedInputStream(s.getInputStream(), 1 shl 16))
             val out = BufferedOutputStream(s.getOutputStream(), 1 shl 14)
             socket = s
@@ -156,6 +164,12 @@ class RfbClient(
 
             // first full framebuffer request
             requestUpdate(incremental = false)
+
+            // handshake done - readLoop blocks indefinitely until updates arrive
+            s.soTimeout = 0
+        } catch (e: java.net.SocketTimeoutException) {
+            runCatching { s.close() }
+            throw IOException("VNC 连接/握手超时: ${e.message}")
         } catch (e: Exception) {
             runCatching { s.close() }
             throw e

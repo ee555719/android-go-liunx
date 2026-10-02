@@ -98,8 +98,11 @@ fun DisplayScreen(vm: MainViewModel) {
         onDispose { client?.close() }
     }
 
-    // connect / read loop with auto-retry (same pattern as TerminalScreen)
+    // connect / read loop with auto-retry (same pattern as TerminalScreen).
+    // `gen` guards against a stale (cancelled) effect overwriting status or
+    // the client reference after the user tapped 重连 again.
     LaunchedEffect(attempt) {
+        val gen = attempt
         connecting = true
         status = "连接中…"
         client?.close()
@@ -110,25 +113,32 @@ fun DisplayScreen(vm: MainViewModel) {
             val c = RfbClient()
             try {
                 withContext(Dispatchers.IO) { c.connect() }
+                if (attempt != gen) break
                 client = c
                 connecting = false
                 status = "已连接 ${c.width}x${c.height}" +
                         (c.desktopName.takeIf { it.isNotBlank() }?.let { " · $it" } ?: "")
                 withContext(Dispatchers.IO) {
-                    c.readLoop { scope.launch { frameTick++ } }
+                    c.readLoop { if (attempt == gen) scope.launch { frameTick++ } }
                 }
-                status = "连接已断开"
-            } catch (e: Exception) {
-                status = "连接失败（第 $tries 次）：${e.message ?: "未知错误"}，2 秒后重试…"
+                if (attempt == gen) status = "连接已断开"
+            } catch (e: Throwable) {
+                if (attempt == gen) {
+                    connecting = false
+                    status = "连接失败（第 $tries 次）：" +
+                            "${e::class.simpleName}: ${e.message ?: "无消息"}，2 秒后重试…"
+                }
             } finally {
                 c.close()
-                if (client === c) client = null
+                if (client === c && attempt == gen) client = null
             }
-            if (!isActive) break
-            connecting = true
+            if (!isActive || attempt != gen) break
             delay(2000)
+            if (!isActive || attempt != gen) break
+            connecting = true
             status = "连接中…"
         }
+        if (attempt == gen) connecting = false
     }
 
     // invalidate composable when new frames arrive (polled reader counter → main)
@@ -203,7 +213,7 @@ fun DisplayScreen(vm: MainViewModel) {
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(
-                text = (if (connecting) "连接中… · " else "") + status,
+                text = status,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.weight(1f)
@@ -215,7 +225,7 @@ fun DisplayScreen(vm: MainViewModel) {
             ) { Text("重连") }
             OutlinedButton(
                 onClick = {
-                    focusReq.requestFocus()
+                    runCatching { focusReq.requestFocus() }
                     keyboard?.show()
                 },
                 contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
@@ -242,7 +252,7 @@ fun DisplayScreen(vm: MainViewModel) {
                     }
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
-                        focusReq.requestFocus()
+                        runCatching { focusReq.requestFocus() }
                         var dragging = false
                         var twoFinger = false
                         var last = down.position
@@ -251,7 +261,8 @@ fun DisplayScreen(vm: MainViewModel) {
                             val ev = awaitPointerEvent()
                             val c = client ?: break
                             val change = ev.changes.firstOrNull { it.id == down.id }
-                                ?: ev.changes.first()
+                                ?: ev.changes.firstOrNull()
+                            if (change == null) break
                             val pressedCount = ev.changes.count { it.pressed }
                             if (pressedCount >= 2) twoFinger = true
 

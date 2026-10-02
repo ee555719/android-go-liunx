@@ -120,6 +120,7 @@ class TerminalSession(
     fun connectSsh(host: String, port: Int, user: String, password: String): Result<Unit> {
         return runCatching {
             close()
+            reportStatus("连接中…")
             val conn = SshConnection(host, port, user, password, cols, rows)
             conn.connect()
             activate(conn)
@@ -130,6 +131,7 @@ class TerminalSession(
     fun connectSerial(host: String, port: Int): Result<Unit> {
         return runCatching {
             close()
+            reportStatus("连接中…")
             val conn = SerialConnection(host, port)
             conn.connect()
             activate(conn)

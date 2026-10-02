@@ -90,6 +90,11 @@ class QemuManager(val context: Context) {
                 onProcessExited(code)
             }, "qemu-watcher").apply { isDaemon = true }.start()
 
+            // diagnostic: verify QEMU really bound its host-side listeners
+            // (serial/qmp/vnc/ssh). Results are appended to the in-app log so
+            // connection problems can be diagnosed from a log screenshot.
+            schedulePortProbe(cfg)
+
             runCatching { VmService.start(context) }
         } catch (t: Throwable) {
             IsoHelper.releaseDirectFd()
@@ -99,6 +104,32 @@ class QemuManager(val context: Context) {
             appendLog("# start failed: ${lastError}\n")
             throw t
         }
+    }
+
+    private fun schedulePortProbe(cfg: VmConfig) {
+        val ports = listOf(
+            "serial" to cfg.serialPort,
+            "qmp" to cfg.qmpPort,
+            "vnc" to com.ee555719.golinux.display.RfbClient.PORT,
+            "ssh" to cfg.sshHostPort
+        )
+        Thread({
+            runCatching { Thread.sleep(1500) }
+            if (!isAlive) return@Thread
+            val results = ports.joinToString(" ") { (name, port) ->
+                "$name:$port=" + probePort(port)
+            }
+            appendLog("# port probe (1.5s after start): $results\n")
+        }, "port-probe").apply { isDaemon = true }.start()
+    }
+
+    private fun probePort(port: Int): String = try {
+        java.net.Socket().use { s ->
+            s.connect(java.net.InetSocketAddress("127.0.0.1", port), 1000)
+            "open"
+        }
+    } catch (t: Throwable) {
+        "closed(${t.javaClass.simpleName})"
     }
 
     private fun onProcessExited(code: Int) {

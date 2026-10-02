@@ -44,8 +44,10 @@ import androidx.compose.ui.unit.sp
 import com.ee555719.golinux.ssh.TerminalSession
 import com.ee555719.golinux.terminal.TerminalEmulator
 import com.ee555719.golinux.ui.MainViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withContext
 
 private const val TERM_COLS = 100
 private const val TERM_ROWS = 30
@@ -66,31 +68,43 @@ fun TerminalScreen(vm: MainViewModel, initialMode: String) {
         onDispose { session.close() }
     }
 
-    // connection retry loop (SSH or serial console)
+    // connection retry loop (SSH or serial console). The connects block on
+    // sockets for seconds - they MUST run on Dispatchers.IO, otherwise Android
+    // throws NetworkOnMainThreadException and the connection always fails.
     LaunchedEffect(mode, attempt) {
         connecting = true
         session.close()
+        session.reportStatus("连接中…")
         var tries = 0
         while (isActive) {
             tries++
-            val result = if (mode == "ssh") {
-                session.connectSsh(
-                    host = "127.0.0.1",
-                    port = cfg.sshHostPort,
-                    user = cfg.sshUser.ifBlank { "root" },
-                    password = cfg.sshPassword
-                )
-            } else {
-                session.connectSerial("127.0.0.1", cfg.serialPort)
+            val result = withContext(Dispatchers.IO) {
+                if (mode == "ssh") {
+                    session.connectSsh(
+                        host = "127.0.0.1",
+                        port = cfg.sshHostPort,
+                        user = cfg.sshUser.ifBlank { "root" },
+                        password = cfg.sshPassword
+                    )
+                } else {
+                    session.connectSerial("127.0.0.1", cfg.serialPort)
+                }
             }
             if (result.isSuccess) {
                 connecting = false
                 break
             }
+            if (!isActive) break
+            connecting = false
             session.reportStatus(
-                "连接失败（第 $tries 次）：${result.exceptionOrNull()?.message ?: "未知错误"}，2 秒后重试…"
+                "连接失败（第 $tries 次）：" + (result.exceptionOrNull()?.let {
+                    "${it::class.simpleName}: ${it.message ?: "无消息"}"
+                } ?: "未知错误") + "，2 秒后重试…"
             )
             delay(2000)
+            if (!isActive) break
+            connecting = true
+            session.reportStatus("连接中…")
         }
         connecting = false
     }
@@ -135,7 +149,7 @@ fun TerminalScreen(vm: MainViewModel, initialMode: String) {
             }
         }
         Text(
-            text = (if (connecting) "连接中… · " else "") + status,
+            text = status,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(vertical = 4.dp)

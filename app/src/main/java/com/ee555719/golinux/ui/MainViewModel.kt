@@ -53,8 +53,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val cfg = config.value
                 app.qemuManager.onConfigApplied(cfg)
+                val effectiveRules = rules.value.ifEmpty { defaultRules() }
                 withContext(Dispatchers.IO) {
-                    app.qemuManager.start(cfg, rules.value)
+                    app.qemuManager.start(cfg, effectiveRules)
                 }
                 autoSshPending = cfg.bootMode == com.ee555719.golinux.data.BootMode.DISK && cfg.autoSsh
             } catch (t: Throwable) {
@@ -77,8 +78,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             error.value = null
             try {
                 val cfg = config.value
+                val effectiveRules = rules.value.ifEmpty { defaultRules() }
                 withContext(Dispatchers.IO) {
-                    app.qemuManager.restart(cfg, rules.value)
+                    app.qemuManager.restart(cfg, effectiveRules)
                 }
                 autoSshPending = cfg.bootMode == com.ee555719.golinux.data.BootMode.DISK && cfg.autoSsh
             } catch (t: Throwable) {
@@ -124,6 +126,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun clearError() {
         error.value = null
     }
+
+    /** Fallback used when the rules DataStore flow has not emitted yet. */
+    private fun defaultRules(): List<PortForwardRule> = listOf(
+        PortForwardRule(id = 1, enabled = true, hostPort = 60022, guestPort = 22, label = "SSH")
+    )
 
     fun showInfo(msg: String) {
         info.value = msg
