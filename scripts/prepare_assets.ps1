@@ -275,6 +275,13 @@ try {
     if (Test-Path $libStage) { Remove-Item -Recurse -Force $libStage }
     New-Item -ItemType Directory -Force -Path $libStage | Out-Null
 
+    # share/qemu subset (option ROMs + keymaps + dtb + firmware): the full
+    # dir is 315 MB (other-arch edk2 images) and must NOT be shipped
+    $shareStage = Join-Path $Staging "share-stage"
+    if (Test-Path $shareStage) { Remove-Item -Recurse -Force $shareStage }
+    $destQemuShare = Join-Path $shareStage "share\qemu"
+    New-Item -ItemType Directory -Force -Path $destQemuShare | Out-Null
+
     $gotQemu = Test-Path $qemuSrc
     $gotImg  = Test-Path $imgSrc
 
@@ -304,6 +311,19 @@ try {
                     [System.IO.File]::Copy($_.FullName, $dst, $true)
                 }
             }
+        }
+
+        # QEMU data files (roms/keymaps/dtb/firmware subset)
+        $qemuShare = Join-Path $root "$prefixRel\share\qemu"
+        if (Test-Path $qemuShare) {
+            Get-ChildItem -File $qemuShare | Where-Object { $_.Extension -eq ".rom" } | ForEach-Object {
+                Copy-Item $_.FullName (Join-Path $destQemuShare $_.Name) -Force
+            }
+            foreach ($sub in @("keymaps", "dtb", "firmware")) {
+                $s = Join-Path $qemuShare $sub
+                if (Test-Path $s) { Copy-Item $s (Join-Path $destQemuShare $sub) -Recurse -Force }
+            }
+            Log "collected share/qemu subset from $pkg"
         }
     }
 
@@ -336,6 +356,15 @@ try {
     & tar -czf $LibsAsset -C $libStage .
     if ($LASTEXITCODE -ne 0 -or -not (Test-Path $LibsAsset)) { Fail "failed to pack qemu-libs.tar.gz" }
     Log "qemu-libs.tar.gz = $([math]::Round((Get-Item $LibsAsset).Length/1MB,1)) MB"
+
+    # ---- pack assets/qemu-share.tar.gz (QEMU datadir for -L) ----
+    $shareCount = (Get-ChildItem -Recurse -File $shareStage -ErrorAction SilentlyContinue).Count
+    if ($shareCount -eq 0) { Fail "share/qemu subset not collected (qemu-common package missing?)" }
+    $ShareAsset = Join-Path $AssetsDir "qemu-share.tar.gz"
+    if (Test-Path $ShareAsset) { Remove-Item -Force $ShareAsset }
+    & tar -czf $ShareAsset -C $shareStage .
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path $ShareAsset)) { Fail "failed to pack qemu-share.tar.gz" }
+    Log "qemu-share.tar.gz = $([math]::Round((Get-Item $ShareAsset).Length/1MB,1)) MB ($shareCount files)"
 
     # ---- UEFI firmware from Debian ----
     $fwOk = (Test-Path (Join-Path $FwDir "AAVMF_CODE.fd")) -and -not $Force

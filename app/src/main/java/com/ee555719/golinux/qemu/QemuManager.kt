@@ -53,6 +53,7 @@ class QemuManager(val context: Context) {
             }
             paths.ensureDirs()
             paths.ensureLibs()
+            paths.ensureShare()
             paths.ensureFirmware()
             if (!paths.hasFirmware()) {
                 throw IllegalStateException("缺少 UEFI 固件 AAVMF_CODE.fd，请运行 scripts/prepare_assets.ps1")

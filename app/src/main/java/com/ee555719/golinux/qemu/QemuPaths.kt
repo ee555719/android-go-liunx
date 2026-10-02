@@ -26,6 +26,7 @@ class QemuPaths(private val context: Context) {
     val rootDir: File get() = File(context.filesDir, "qemu")
     val libDir: File get() = File(rootDir, "lib")
     val shareDir: File get() = File(rootDir, "share")
+    val shareQemuDir: File get() = File(shareDir, "qemu")
     val tmpDir: File get() = File(context.filesDir, "tmp")
     val homeDir: File get() = File(context.filesDir, "home")
 
@@ -46,6 +47,9 @@ class QemuPaths(private val context: Context) {
     val libsReady: Boolean
         get() = File(libDir, ".ready").exists()
 
+    val shareReady: Boolean
+        get() = File(shareDir, ".ready").exists()
+
     @Synchronized
     fun ensureLibs() {
         ensureDirs()
@@ -62,6 +66,34 @@ class QemuPaths(private val context: Context) {
         }
         marker.writeText("ok")
     }
+
+    /**
+     * Extract the QEMU data directory (option ROMs such as efi-virtio.rom,
+     * keymaps, dtbs) to filesDir/qemu/share/qemu. QEMU is pointed at it via -L.
+     * The tar entries are rooted at "share/qemu/...", hence extraction target
+     * is rootDir rather than shareDir.
+     */
+    @Synchronized
+    fun ensureShare() {
+        ensureDirs()
+        if (shareReady) return
+        val marker = File(shareDir, ".ready")
+        shareDir.listFiles()?.forEach { if (it.name != ".ready") it.deleteRecursively() }
+        val assetName = listOf("qemu-share.tar.gz", "qemu-share.tar").firstOrNull { name ->
+            runCatching { context.assets.open(name).close() }.isSuccess
+        } ?: throw IllegalStateException("缺少 QEMU 数据文件包 assets/qemu-share.tar.gz，请运行 scripts/prepare_assets.ps1")
+        context.assets.open(assetName).use { input ->
+            TarExtractor.extractAuto(input, rootDir)
+        }
+        marker.writeText("ok")
+    }
+
+    /** True if the APK bundles the QEMU share asset (extracted on first start). */
+    fun shareAssetPresent(): Boolean = runCatching {
+        context.assets.open("qemu-share.tar.gz").close()
+    }.isSuccess || runCatching {
+        context.assets.open("qemu-share.tar").close()
+    }.isSuccess
 
     @Synchronized
     fun ensureFirmware() {
